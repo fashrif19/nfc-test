@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>فاحص NFC — NOZOLY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c1320;
+    --surface: #131d2e;
+    --surface-2: #1a2740;
+    --line: #243450;
+    --ink: #e8eef7;
+    --muted: #8294b0;
+    --amber: #f5b53d;
+    --amber-soft: rgba(245, 181, 61, 0.14);
+    --green: #3ad07f;
+    --red: #ff5d6c;
+    --blue: #5aa9ff;
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Tajawal', sans-serif;
+    background:
+      radial-gradient(900px 500px at 50% -10%, #16223a 0%, transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 20px 16px calc(40px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+    line-height: 1.6;
+  }
+
+  .wrap { max-width: 540px; margin: 0 auto; }
+
+  /* ---- Header ---- */
+  header { text-align: center; margin-bottom: 22px; }
+  .brand {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; letter-spacing: 2px; color: var(--amber);
+    font-weight: 700; text-transform: uppercase;
+  }
+  .brand::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 12px var(--amber);
+  }
+  h1 { font-size: 26px; font-weight: 800; margin-top: 6px; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  /* ---- Card ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; color: var(--muted);
+    letter-spacing: 1px; margin-bottom: 14px; text-transform: uppercase;
+  }
+
+  /* ---- Diagnostics chips ---- */
+  .checks { display: flex; flex-direction: column; gap: 10px; }
+  .check {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background .25s, box-shadow .25s;
+  }
+  .dot.ok { background: var(--green); box-shadow: 0 0 10px rgba(58,208,127,.5); }
+  .dot.bad { background: var(--red); box-shadow: 0 0 10px rgba(255,93,108,.5); }
+  .dot.warn { background: var(--amber); box-shadow: 0 0 10px rgba(245,181,61,.5); }
+  .check-label { font-weight: 500; font-size: 14px; }
+  .check-state { margin-inline-start: auto; font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  /* ---- Scan target (signature element) ---- */
+  .scanner { text-align: center; padding: 8px 0 4px; }
+  .target {
+    position: relative; width: 150px; height: 150px;
+    margin: 6px auto 18px; display: grid; place-items: center;
+  }
+  .target .core {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--amber-soft); border: 2px solid var(--amber);
+    display: grid; place-items: center; z-index: 2;
+    transition: transform .3s, background .3s;
+  }
+  .target .core svg { width: 30px; height: 30px; stroke: var(--amber); }
+  .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid var(--amber); opacity: 0;
+  }
+  .scanning .ring { animation: pulse 1.8s ease-out infinite; }
+  .scanning .ring:nth-child(2) { animation-delay: .6s; }
+  .scanning .ring:nth-child(3) { animation-delay: 1.2s; }
+  .scanning .core { background: rgba(245,181,61,.28); }
+  @keyframes pulse {
+    0%   { opacity: .7; transform: scale(.42); }
+    100% { opacity: 0;  transform: scale(1); }
+  }
+  .target.success .core { background: rgba(58,208,127,.25); border-color: var(--green); transform: scale(1.08); }
+  .target.success .core svg { stroke: var(--green); }
+
+  .scan-status { font-size: 14px; color: var(--muted); min-height: 22px; margin-bottom: 14px; }
+  .scan-status.live { color: var(--amber); font-weight: 700; }
+
+  /* ---- Buttons ---- */
+  .btn {
+    width: 100%; border: none; border-radius: 12px;
+    padding: 15px; font-family: 'Tajawal', sans-serif;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: transform .1s, opacity .2s; touch-action: manipulation;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--amber); color: #1a1206; }
+  .btn-ghost { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ---- Read results ---- */
+  #results:empty { display: none; }
+  .result-card {
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; margin-bottom: 10px;
+    animation: slideIn .3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+  .uid-block { border-color: var(--amber); background: var(--amber-soft); }
+  .field-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .field-value {
+    font-family: 'JetBrains Mono', monospace; font-size: 15px;
+    word-break: break-all; margin-top: 4px; direction: ltr; text-align: left;
+  }
+  .uid-block .field-value { color: var(--amber); font-weight: 700; font-size: 17px; }
+  .rec-type {
+    display: inline-block; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    background: var(--line); color: var(--blue); padding: 2px 8px;
+    border-radius: 6px; margin-bottom: 8px;
+  }
+
+  /* ---- Write section ---- */
+  .input {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; color: var(--ink);
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    direction: ltr; text-align: left; margin-bottom: 10px;
+  }
+  .input:focus { outline: none; border-color: var(--amber); }
+
+  /* ---- Log console ---- */
+  #log {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    background: #07101e; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; max-height: 200px; overflow-y: auto;
+    direction: ltr; text-align: left; color: var(--muted);
+  }
+  #log .line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); white-space: pre-wrap; word-break: break-all; }
+  #log .t-err { color: var(--red); }
+  #log .t-ok { color: var(--green); }
+  #log .t-info { color: var(--blue); }
+  .ts { color: #3d5071; margin-inline-end: 8px; }
+
+  .banner {
+    border-radius: 12px; padding: 12px 14px; font-size: 13.5px;
+    margin-bottom: 16px; line-height: 1.7;
+  }
+  .banner-warn { background: rgba(245,181,61,.1); border: 1px solid rgba(245,181,61,.35); color: #ffdfa0; }
+  .banner-warn b { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="brand">NOZOLY · NFC</span>
+    <h1>فاحص بطاقات NFC</h1>
+    <p class="sub">اقرأ واكتب بطاقات NDEF — Chrome على Android</p>
+  </header>
+
+  <div class="banner banner-warn" id="hostBanner" style="display:none">
+    ⚠️ <b>لن تعمل القراءة داخل معاينة مدمجة (iframe).</b>
+    افتح هذه الصفحة مباشرةً في <b>Chrome على Android</b> عبر رابط <b>HTTPS</b>
+    (مثل GitHub Pages)، لأن Web NFC تتطلب إطارًا رئيسيًا وسياقًا آمنًا.
+  </div>
+
+  <!-- Diagnostics -->
+  <div class="card">
+    <div class="card-title">التشخيص</div>
+    <div class="checks">
+      <div class="check"><span class="dot" id="d-api"></span><span class="check-label">دعم المتصفح (NDEFReader)</span><span class="check-state" id="s-api">—</span></div>
+      <div class="check"><span class="dot" id="d-https"></span><span class="check-label">سياق آمن (HTTPS)</span><span class="check-state" id="s-https">—</span></div>
+      <div class="check"><span class="dot" id="d-perm"></span><span class="check-label">إذن NFC</span><span class="check-state" id="s-perm">—</span></div>
+    </div>
+  </div>
+
+  <!-- Scanner -->
+  <div class="card scanner">
+    <div class="card-title" style="text-align:center">القراءة</div>
+    <div class="target" id="target">
+      <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+      <div class="core">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 0 1 9-9"/><path d="M7 12a5 5 0 0 1 5-5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+    </div>
+    <div class="scan-status" id="scanStatus">اضغط ابدأ، ثم قرّب البطاقة من ظهر الجهاز</div>
+    <button class="btn btn-primary" id="scanBtn">▶ ابدأ القراءة</button>
+    <button class="btn btn-ghost" id="stopBtn" style="margin-top:10px;display:none">■ إيقاف</button>
+  </div>
+
+  <div id="results"></div>
+
+  <!-- Write -->
+  <div class="card">
+    <div class="card-title">الكتابة على بطاقة (اختبار)</div>
+    <input class="input" id="writeText" placeholder="نص أو رابط لكتابته على البطاقة" value="https://nozoly.app/tag/001" />
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="writeUrlBtn">اكتب كرابط</button>
+      <button class="btn btn-ghost" id="writeTextBtn">اكتب كنص</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <div class="card-title">سجل الأحداث</div>
+    <div id="log"></div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const target = $("target");
+  let ndef = null;       // NDEFReader instance
+  let scanning = false;
+  let abortCtrl = null;
+
+  /* ---------- Logging ---------- */
+  function log(msg, type = "") {
+    const el = $("log");
+    const line = document.createElement("div");
+    line.className = "line" + (type ? " t-" + type : "");
+    const ts = new Date().toLocaleTimeString("en-GB");
+    line.innerHTML = `<span class="ts">${ts}</span>${msg}`;
+    el.prepend(line);
+  }
+
+  function setChip(idDot, idState, state, text) {
+    const dot = $(idDot);
+    dot.className = "dot " + state;       // ok | bad | warn
+    $(idState).textContent = text;
+  }
+
+  /* ---------- Diagnostics ---------- */
+  async function runDiagnostics() {
+    // 1) API support
+    const hasApi = ("NDEFReader" in window);
+    setChip("d-api", "s-api", hasApi ? "ok" : "bad", hasApi ? "متوفر" : "غير مدعوم");
+    if (!hasApi) {
+      log("NDEFReader غير موجود — استخدم Chrome على Android.", "err");
+    }
+
+    // 2) Secure context
+    const secure = window.isSecureContext;
+    setChip("d-https", "s-https", secure ? "ok" : "bad",
+            secure ? "آمن" : (location.protocol + "//"));
+    if (!secure) log("ليست HTTPS — القراءة سترفض.", "err");
+
+    // 3) Permission (best-effort; not all builds support querying 'nfc')
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const p = await navigator.permissions.query({ name: "nfc" });
+        const map = { granted: ["ok", "ممنوح"], prompt: ["warn", "سيُطلب"], denied: ["bad", "مرفوض"] };
+        const [st, label] = map[p.state] || ["warn", p.state];
+        setChip("d-perm", "s-perm", st, label);
+        p.onchange = () => runDiagnostics();
+      } catch {
+        setChip("d-perm", "s-perm", "warn", "يُطلب عند البدء");
+      }
+    } else {
+      setChip("d-perm", "s-perm", "warn", "يُطلب عند البدء");
+    }
+
+    // Disable controls if API missing
+    const disable = !hasApi;
+    $("scanBtn").disabled = disable;
+    $("writeUrlBtn").disabled = disable;
+    $("writeTextBtn").disabled = disable;
+
+    // iframe / non-top-frame warning
+    if (window.self !== window.top) {
+      $("hostBanner").style.display = "block";
+      log("الصفحة داخل iframe — قد تُحجب صلاحية NFC.", "info");
+    }
+  }
+
+  /* ---------- Decode a record ---------- */
+  function decodeRecord(rec) {
+    const dec = new TextDecoder(rec.encoding || "utf-8");
+    let value = "";
+    try {
+      switch (rec.recordType) {
+        case "text":
+          value = dec.decode(rec.data);
+          if (rec.lang) value += `  (lang: ${rec.lang})`;
+          break;
+        case "url":
+        case "absolute-url":
+          value = dec.decode(rec.data);
+          break;
+        case "mime":
+          value = `[${rec.mediaType}] ` + dec.decode(rec.data);
+          break;
+        default:
+          // unknown / external / smart-poster -> show raw hex
+          value = "0x" + [...new Uint8Array(rec.data.buffer || rec.data)]
+            .map(b => b.toString(16).padStart(2, "0")).join(" ");
+      }
+    } catch (e) {
+      value = "(تعذّر فك الترميز)";
+    }
+    return value;
+  }
+
+  /* ---------- Render reading ---------- */
+  function renderReading(serialNumber, message) {
+    const box = $("results");
+    box.innerHTML = "";
+
+    // UID block
+    const uid = document.createElement("div");
+    uid.className = "result-card uid-block";
+    uid.innerHTML = `<div class="field-label">UID (Serial Number)</div>
+                     <div class="field-value">${serialNumber || "غير متاح"}</div>`;
+    box.appendChild(uid);
+
+    if (!message.records.length) {
+      const empty = document.createElement("div");
+      empty.className = "result-card";
+      empty.innerHTML = `<div class="field-value" style="color:var(--muted)">
+        البطاقة بلا سجلات NDEF (قد تكون فارغة أو غير NDEF مثل MIFARE) — متاح الـ UID فقط.</div>`;
+      box.appendChild(empty);
+      return;
+    }
+
+    message.records.forEach((rec, i) => {
+      const c = document.createElement("div");
+      c.className = "result-card";
+      c.innerHTML = `<span class="rec-type">#${i + 1} · ${rec.recordType}</span>
+                     <div class="field-value">${decodeRecord(rec)}</div>`;
+      box.appendChild(c);
+    });
+  }
+
+  function flashSuccess() {
+    target.classList.add("success");
+    setTimeout(() => target.classList.remove("success"), 700);
+  }
+
+  /* ---------- Scan ---------- */
+  async function startScan() {
+    if (scanning) return;
+    try {
+      ndef = new NDEFReader();
+      abortCtrl = new AbortController();
+      await ndef.scan({ signal: abortCtrl.signal });
+
+      scanning = true;
+      target.classList.add("scanning");
+      $("scanBtn").style.display = "none";
+      $("stopBtn").style.display = "block";
+      const ss = $("scanStatus");
+      ss.textContent = "● جاهز — قرّب البطاقة الآن";
+      ss.classList.add("live");
+      setChip("d-perm", "s-perm", "ok", "ممنوح");
+      log("بدأ المسح بنجاح.", "ok");
+
+      ndef.onreading = ({ serialNumber, message }) => {
+        flashSuccess();
+        log(`قراءة بطاقة — UID: ${serialNumber} · سجلات: ${message.records.length}`, "ok");
+        renderReading(serialNumber, message);
+      };
+      ndef.onreadingerror = () => {
+        log("تعذّرت قراءة محتوى البطاقة (نوع غير مدعوم أو تلف).", "err");
+      };
+    } catch (err) {
+      handleError("فشل بدء المسح", err);
+    }
+  }
+
+  function stopScan() {
+    if (abortCtrl) abortCtrl.abort();
+    scanning = false;
+    target.classList.remove("scanning");
+    $("scanBtn").style.display = "block";
+    $("stopBtn").style.display = "none";
+    const ss = $("scanStatus");
+    ss.textContent = "تم الإيقاف. اضغط ابدأ للمتابعة.";
+    ss.classList.remove("live");
+    log("تم إيقاف المسح.", "info");
+  }
+
+  /* ---------- Write ---------- */
+  async function write(asUrl) {
+    const val = $("writeText").value.trim();
+    if (!val) { log("لا يوجد نص للكتابة.", "err"); return; }
+    try {
+      const writer = new NDEFReader();
+      const record = asUrl ? { recordType: "url", data: val }
+                           : { recordType: "text", data: val };
+      log(`بانتظار بطاقة للكتابة (${asUrl ? "url" : "text"})… قرّبها الآن.`, "info");
+      await writer.write({ records: [record] });
+      flashSuccess();
+      log("تمت الكتابة على البطاقة بنجاح.", "ok");
+    } catch (err) {
+      handleError("فشلت الكتابة", err);
+    }
+  }
+
+  /* ---------- Error mapping ---------- */
+  function handleError(prefix, err) {
+    let hint = err && err.message ? err.message : String(err);
+    if (err && err.name === "NotAllowedError") hint = "الإذن مرفوض. فعّل صلاحية NFC للموقع.";
+    else if (err && err.name === "NotSupportedError") hint = "الجهاز لا يدعم NFC أو NFC مُعطّل في الإعدادات.";
+    else if (err && err.name === "NotReadableError") hint = "تعذّر الوصول لعتاد NFC.";
+    else if (err && err.name === "AbortError") hint = "أُلغيت العملية.";
+    log(`${prefix}: ${hint}`, "err");
+    if (err && err.name === "NotAllowedError") setChip("d-perm", "s-perm", "bad", "مرفوض");
+  }
+
+  /* ---------- Wire up ---------- */
+  $("scanBtn").addEventListener("click", startScan);
+  $("stopBtn").addEventListener("click", stopScan);
+  $("writeUrlBtn").addEventListener("click", () => write(true));
+  $("writeTextBtn").addEventListener("click", () => write(false));
+
+  runDiagnostics();
+  log("الصفحة جاهزة.", "info");
+})();
+</script>
+</body>
+</html>
